@@ -7439,6 +7439,19 @@ const char* ImGui::GetKeyName(ImGuiKey key)
     return GKeyNames[key - ImGuiKey_NamedKey_BEGIN];
 }
 
+ImGuiKey ImGui::GetUntranslatedKey(ImGuiKey key)
+{
+    IM_ASSERT(IsNamedKey(key));
+
+    ImGuiIO& io = GetIO();
+
+    if (io.BackendFlags & ImGuiBackednFlags_HasUntranslatedKeys && io.GetUntranslatedKey)
+        return io.GetUntranslatedKey(&io.KeysData[key]);
+
+    return ImGuiKey_None;
+}
+
+
 // Note that Dear ImGui doesn't know the meaning/semantic of ImGuiKey from 0..511: they are legacy native keycodes.
 // Consider transitioning from 'IsKeyDown(MY_ENGINE_KEY_A)' (<1.87) to IsKeyDown(ImGuiKey_A) (>= 1.87)
 bool ImGui::IsKeyDown(ImGuiKey key)

@@ -895,6 +895,7 @@ namespace ImGui
     IMGUI_API bool          IsKeyReleased(ImGuiKey key);                                        // was key released (went from Down to !Down)?
     IMGUI_API int           GetKeyPressedAmount(ImGuiKey key, float repeat_delay, float rate);  // uses provided repeat rate/delay. return a count, most often 0 or 1 but might be >1 if RepeatRate is small enough that DeltaTime > RepeatRate
     IMGUI_API const char*   GetKeyName(ImGuiKey key);                                           // [DEBUG] returns English name of the key. Those names a provided for debugging purpose and are not meant to be saved persistently not compared.
+    IMGUI_API ImGuiKey      GetUntranslatedKey(ImGuiKey key);                                   // map ImGuiKey_* into ImGuiKey_ on US keyboard layout if possible
     IMGUI_API void          CaptureKeyboardFromApp(bool want_capture_keyboard_value = true);    // attention: misleading name! manually override io.WantCaptureKeyboard flag next frame (said flag is entirely left for your application to handle). e.g. force capture keyboard when your widget is being hovered. This is equivalent to setting "io.WantCaptureKeyboard = want_capture_keyboard_value"; after the next NewFrame() call.
 
     // Inputs Utilities: Mouse
@@ -1550,7 +1551,8 @@ enum ImGuiBackendFlags_
     ImGuiBackendFlags_HasGamepad            = 1 << 0,   // Backend Platform supports gamepad and currently has one connected.
     ImGuiBackendFlags_HasMouseCursors       = 1 << 1,   // Backend Platform supports honoring GetMouseCursor() value to change the OS cursor shape.
     ImGuiBackendFlags_HasSetMousePos        = 1 << 2,   // Backend Platform supports io.WantSetMousePos requests to reposition the OS mouse position (only used if ImGuiConfigFlags_NavEnableSetMousePos is set).
-    ImGuiBackendFlags_RendererHasVtxOffset  = 1 << 3    // Backend Renderer supports ImDrawCmd::VtxOffset. This enables output of large meshes (64K+ vertices) while still using 16-bit indices.
+    ImGuiBackendFlags_RendererHasVtxOffset  = 1 << 3,   // Backend Renderer supports ImDrawCmd::VtxOffset. This enables output of large meshes (64K+ vertices) while still using 16-bit indices.
+    ImGuiBackednFlags_HasUntranslatedKeys   = 1 << 4,   // Backend Platform supports physical keyboard layout mapping to ImGuiKey_XXX.
 };
 
 // Enumeration for PushStyleColor() / PopStyleColor()
@@ -1990,6 +1992,9 @@ struct ImGuiIO
 #else
     void*       _UnusedPadding;                                     // Unused field to keep data structure the same size.
 #endif
+
+    // Optional: Untranslated key support
+    ImGuiKey    (*GetUntranslatedKey)(const ImGuiKeyData* key_data);
 
     //------------------------------------------------------------------
     // Input - Fill before calling NewFrame()
