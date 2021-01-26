@@ -16,6 +16,7 @@
 
 // CHANGELOG
 // (minor and older changes stripped away, please see git history for details)
+//  2021-XX-XX: Renderer: Add support for ImGuiBackendFlags_RendererHasTexReload.
 //  2021-06-29: Reorganized backend to pull data from a single structure to facilitate usage with multiple-contexts (all g_XXXX access changed to bd->XXXX).
 //  2021-05-19: Renderer: Replaced direct access to ImDrawCmd::TextureId with a call to ImDrawCmd::GetTexID(). (will become a requirement)
 //  2021-02-18: Change blending equation to preserve alpha in output buffer.
@@ -186,7 +187,7 @@ void ImGui_ImplAllegro5_RenderDrawData(ImDrawData* draw_data)
     al_use_projection_transform(&last_projection_transform);
 }
 
-bool ImGui_ImplAllegro5_CreateDeviceObjects()
+static bool ImGui_ImplAllegro5_UpdateFontsTexture()
 {
     // Build texture atlas
     ImGui_ImplAllegro5_Data* bd = ImGui_ImplAllegro5_GetBackendData();
@@ -194,6 +195,7 @@ bool ImGui_ImplAllegro5_CreateDeviceObjects()
     unsigned char* pixels;
     int width, height;
     io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+    io.Fonts->MarkClean();
 
     // Create texture
     int flags = al_get_new_bitmap_flags();
@@ -221,9 +223,24 @@ bool ImGui_ImplAllegro5_CreateDeviceObjects()
     if (!cloned_img)
         return false;
 
+    if (g_Texture)
+    {
+        al_destroy_bitmap(g_Texture);
+        ImGui::GetIO().Fonts->SetTexID(NULL);
+        g_Texture = NULL;
+    }
+
     // Store our identifier
     io.Fonts->SetTexID((void*)cloned_img);
     bd->Texture = cloned_img;
+
+    return true;
+}
+
+bool ImGui_ImplAllegro5_CreateDeviceObjects()
+{
+    if (!ImGui_ImplAllegro5_UpdateFontsTexture())
+        return false;
 
     // Create an invisible mouse cursor
     // Because al_hide_mouse_cursor() seems to mess up with the actual inputs..
@@ -278,6 +295,7 @@ bool ImGui_ImplAllegro5_Init(ALLEGRO_DISPLAY* display)
     io.BackendPlatformUserData = (void*)bd;
     io.BackendPlatformName = io.BackendRendererName = "imgui_impl_allegro5";
     io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;       // We can honor GetMouseCursor() values (optional)
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTexReload;  // We can update font atlas textures (optional)
 
     bd->Display = display;
 
@@ -433,6 +451,9 @@ void ImGui_ImplAllegro5_NewFrame()
         ImGui_ImplAllegro5_CreateDeviceObjects();
 
     ImGuiIO& io = ImGui::GetIO();
+
+    if (io.Fonts->IsDirty())
+        ImGui_ImplAllegro5_UpdateFontsTexture();
 
     // Setup display size (every frame to accommodate for window resizing)
     int w, h;
