@@ -159,6 +159,7 @@ struct ImGuiTableColumnSortSpecs;   // Sorting specification for one column of a
 struct ImGuiTextBuffer;             // Helper to hold and append into a text buffer (~string builder)
 struct ImGuiTextFilter;             // Helper to parse and apply text filters (e.g. "aaaaa[,bbbbb][,ccccc]")
 struct ImGuiViewport;               // A Platform Window (always only one in 'master' branch), in the future may represent Platform Monitor
+struct ImTexture;
 
 // Enums/Flags (declared as int for compatibility with old C++, to allow using as flags and to not pollute the top of this file)
 // - Tip: Use your programming IDE navigation facilities on the names in the _central column_ below to find the actual flags/enum lists!
@@ -488,7 +489,9 @@ namespace ImGui
     IMGUI_API bool          SmallButton(const char* label);                                 // button with FramePadding=(0,0) to easily embed within text
     IMGUI_API bool          InvisibleButton(const char* str_id, const ImVec2& size, ImGuiButtonFlags flags = 0); // flexible button behavior without the visuals, frequently useful to build custom behaviors using the public api (along with IsItemActive, IsItemHovered, etc.)
     IMGUI_API bool          ArrowButton(const char* str_id, ImGuiDir dir);                  // square button with an arrow shape
+    IMGUI_API void          Image(ImTexture texture, const ImVec2& size, const ImVec2& uv0 = ImVec2(0, 0), const ImVec2& uv1 = ImVec2(1,1), const ImVec4& tint_col = ImVec4(1,1,1,1), const ImVec4& border_col = ImVec4(0,0,0,0));
     IMGUI_API void          Image(ImTextureID user_texture_id, const ImVec2& size, const ImVec2& uv0 = ImVec2(0, 0), const ImVec2& uv1 = ImVec2(1,1), const ImVec4& tint_col = ImVec4(1,1,1,1), const ImVec4& border_col = ImVec4(0,0,0,0));
+    IMGUI_API bool          ImageButton(ImTexture texture, const ImVec2& size, const ImVec2& uv0 = ImVec2(0, 0),  const ImVec2& uv1 = ImVec2(1,1), int frame_padding = -1, const ImVec4& bg_col = ImVec4(0,0,0,0), const ImVec4& tint_col = ImVec4(1,1,1,1));    // <0 frame_padding uses default frame padding settings. 0 for no padding
     IMGUI_API bool          ImageButton(ImTextureID user_texture_id, const ImVec2& size, const ImVec2& uv0 = ImVec2(0, 0),  const ImVec2& uv1 = ImVec2(1,1), int frame_padding = -1, const ImVec4& bg_col = ImVec4(0,0,0,0), const ImVec4& tint_col = ImVec4(1,1,1,1));    // <0 frame_padding uses default frame padding settings. 0 for no padding
     IMGUI_API bool          Checkbox(const char* label, bool* v);
     IMGUI_API bool          CheckboxFlags(const char* label, int* flags, int flags_value);
@@ -2251,10 +2254,37 @@ typedef void (*ImDrawCallback)(const ImDrawList* parent_list, const ImDrawCmd* c
 //   those fields allow us to render meshes larger than 64K vertices while keeping 16-bit indices.
 //   Pre-1.71 backends will typically ignore the VtxOffset/IdxOffset fields.
 // - The ClipRect/TextureId/VtxOffset fields must be contiguous as we memcmp() them together (this is asserted for).
+typedef unsigned short ImTextureType;
+
+enum ImTextureType_
+{
+    ImTextureType_Atlas,
+    ImTextureType_UserID
+};
+
+struct ImTexture
+{
+    union
+    {
+        ImTextureID     TextureId;
+        ImFontAtlas*    FontAtlas;
+    };
+    ImTextureType       Type;
+
+    ImTexture() {}
+    explicit ImTexture(ImFontAtlas* font_atlas);
+    explicit ImTexture(ImTextureID texture_id);
+
+    inline friend bool operator==(const ImTexture& lhs, const ImTexture& rhs) { return memcmp(&lhs, &rhs, sizeof(ImTexture)) == 0; }
+    inline friend bool operator!=(const ImTexture& lhs, const ImTexture& rhs) { return !(lhs == rhs); }
+
+    inline ImTextureID GetID() const;
+};
+
 struct ImDrawCmd
 {
     ImVec4          ClipRect;           // 4*4  // Clipping rectangle (x1, y1, x2, y2). Subtract ImDrawData->DisplayPos to get clipping rectangle in "viewport" coordinates
-    ImTextureID     TextureId;          // 4-8  // User-provided texture ID. Set by user in ImfontAtlas::SetTexID() for fonts or passed to Image*() functions. Ignore if never using images or multiple fonts atlas.
+    ImTexture       Texture;            // 8-12 // User-provided texture ID. Set by user in ImfontAtlas::SetTexID() for fonts or passed to Image*() functions. Ignore if never using images or multiple fonts atlas.
     unsigned int    VtxOffset;          // 4    // Start offset in vertex buffer. ImGuiBackendFlags_RendererHasVtxOffset: always 0, otherwise may be >0 to support meshes larger than 64K vertices with 16-bit indices.
     unsigned int    IdxOffset;          // 4    // Start offset in index buffer. Always equal to sum of ElemCount drawn so far.
     unsigned int    ElemCount;          // 4    // Number of indices (multiple of 3) to be rendered as triangles. Vertices are stored in the callee ImDrawList's vtx_buffer[] array, indices in idx_buffer[].
@@ -2263,8 +2293,9 @@ struct ImDrawCmd
 
     ImDrawCmd() { memset(this, 0, sizeof(*this)); } // Also ensure our padding fields are zeroed
 
+    inline void SetTexID(ImTextureID tex_id) { Texture.TextureId = tex_id; Texture.Type = ImTextureType_UserID; }
     // Since 1.83: returns ImTextureID associated with this draw call. Warning: DO NOT assume this is always same as 'TextureId' (we will change this function for an upcoming feature)
-    inline ImTextureID GetTexID() const { return TextureId; }
+    inline ImTextureID GetTexID() const { return Texture.GetID(); }
 };
 
 // Vertex index, default to 16-bit
@@ -2294,7 +2325,7 @@ IMGUI_OVERRIDE_DRAWVERT_STRUCT_LAYOUT;
 struct ImDrawCmdHeader
 {
     ImVec4          ClipRect;
-    ImTextureID     TextureId;
+    ImTexture       Texture;
     unsigned int    VtxOffset;
 };
 
@@ -2378,7 +2409,7 @@ struct ImDrawList
     ImDrawVert*             _VtxWritePtr;       // [Internal] point within VtxBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
     ImDrawIdx*              _IdxWritePtr;       // [Internal] point within IdxBuffer.Data after each add command (to avoid using the ImVector<> operators too much)
     ImVector<ImVec4>        _ClipRectStack;     // [Internal]
-    ImVector<ImTextureID>   _TextureIdStack;    // [Internal]
+    ImVector<ImTexture>     _TextureStack;      // [Internal]
     ImVector<ImVec2>        _Path;              // [Internal] current path building
     ImDrawCmdHeader         _CmdHeader;         // [Internal] template of active commands. Fields should match those of CmdBuffer.back().
     ImDrawListSplitter      _Splitter;          // [Internal] for channels api (note: prefer using your own persistent instance of ImDrawListSplitter!)
@@ -2391,8 +2422,10 @@ struct ImDrawList
     IMGUI_API void  PushClipRect(ImVec2 clip_rect_min, ImVec2 clip_rect_max, bool intersect_with_current_clip_rect = false);  // Render-level scissoring. This is passed down to your render function but not used for CPU-side coarse clipping. Prefer using higher-level ImGui::PushClipRect() to affect logic (hit-testing and widget culling)
     IMGUI_API void  PushClipRectFullScreen();
     IMGUI_API void  PopClipRect();
-    IMGUI_API void  PushTextureID(ImTextureID texture_id);
-    IMGUI_API void  PopTextureID();
+    IMGUI_API void  PushTexture(ImTexture texture);
+    IMGUI_API void  PopTexture();
+    IMGUI_API void  PushTextureID(ImTextureID texture_id);  // DEPRECATED???
+    IMGUI_API void  PopTextureID();                         // DEPRECATED???
     inline ImVec2   GetClipRectMin() const { const ImVec4& cr = _ClipRectStack.back(); return ImVec2(cr.x, cr.y); }
     inline ImVec2   GetClipRectMax() const { const ImVec4& cr = _ClipRectStack.back(); return ImVec2(cr.z, cr.w); }
 
@@ -2425,8 +2458,11 @@ struct ImDrawList
     // - Read FAQ to understand what ImTextureID is.
     // - "p_min" and "p_max" represent the upper-left and lower-right corners of the rectangle.
     // - "uv_min" and "uv_max" represent the normalized texture coordinates to use for those corners. Using (0,0)->(1,1) texture coordinates will generally display the entire texture.
+    IMGUI_API void  AddImage(ImTexture texture, const ImVec2& p_min, const ImVec2& p_max, const ImVec2& uv_min = ImVec2(0, 0), const ImVec2& uv_max = ImVec2(1, 1), ImU32 col = IM_COL32_WHITE);
     IMGUI_API void  AddImage(ImTextureID user_texture_id, const ImVec2& p_min, const ImVec2& p_max, const ImVec2& uv_min = ImVec2(0, 0), const ImVec2& uv_max = ImVec2(1, 1), ImU32 col = IM_COL32_WHITE);
+    IMGUI_API void  AddImageQuad(ImTexture texture, const ImVec2& p1, const ImVec2& p2, const ImVec2& p3, const ImVec2& p4, const ImVec2& uv1 = ImVec2(0, 0), const ImVec2& uv2 = ImVec2(1, 0), const ImVec2& uv3 = ImVec2(1, 1), const ImVec2& uv4 = ImVec2(0, 1), ImU32 col = IM_COL32_WHITE);
     IMGUI_API void  AddImageQuad(ImTextureID user_texture_id, const ImVec2& p1, const ImVec2& p2, const ImVec2& p3, const ImVec2& p4, const ImVec2& uv1 = ImVec2(0, 0), const ImVec2& uv2 = ImVec2(1, 0), const ImVec2& uv3 = ImVec2(1, 1), const ImVec2& uv4 = ImVec2(0, 1), ImU32 col = IM_COL32_WHITE);
+    IMGUI_API void  AddImageRounded(ImTexture texture, const ImVec2& p_min, const ImVec2& p_max, const ImVec2& uv_min, const ImVec2& uv_max, ImU32 col, float rounding, ImDrawFlags flags = 0);
     IMGUI_API void  AddImageRounded(ImTextureID user_texture_id, const ImVec2& p_min, const ImVec2& p_max, const ImVec2& uv_min, const ImVec2& uv_max, ImU32 col, float rounding, ImDrawFlags flags = 0);
 
     // Stateful path API, add points then finish with PathFillConvex() or PathStroke()
@@ -2631,6 +2667,7 @@ struct ImFontAtlas
     IMGUI_API void              GetTexDataAsRGBA32(unsigned char** out_pixels, int* out_width, int* out_height, int* out_bytes_per_pixel = NULL);  // 4 bytes-per-pixel
     bool                        IsBuilt() const             { return Fonts.Size > 0 && TexReady; } // Bit ambiguous: used to detect when user didn't built texture but effectively we should check TexID != 0 except that would be backend dependent...
     void                        SetTexID(ImTextureID id)    { TexID = id; }
+    ImTextureID                 GetTexID() const            { return TexID; }
 
     //-------------------------------------------
     // Glyph Ranges
@@ -2796,6 +2833,28 @@ struct ImGuiViewport
     ImVec2              GetCenter() const       { return ImVec2(Pos.x + Size.x * 0.5f, Pos.y + Size.y * 0.5f); }
     ImVec2              GetWorkCenter() const   { return ImVec2(WorkPos.x + WorkSize.x * 0.5f, WorkPos.y + WorkSize.y * 0.5f); }
 };
+
+
+//-----------------------------------------------------------------------------
+// [SECTION] Inline function implementations
+//-----------------------------------------------------------------------------
+
+inline ImTexture::ImTexture(ImFontAtlas* font_atlas)
+    : FontAtlas(font_atlas)
+    , Type(ImTextureType_Atlas)
+{
+}
+
+inline ImTexture::ImTexture(ImTextureID texture_id)
+    : TextureId(texture_id)
+    , Type(ImTextureType_UserID)
+{
+}
+
+inline ImTextureID ImTexture::GetID() const
+{
+    return Type == ImTextureType_Atlas ? FontAtlas->GetTexID() : TextureId;
+}
 
 //-----------------------------------------------------------------------------
 // [SECTION] Obsolete functions and types
