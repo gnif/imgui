@@ -7282,6 +7282,16 @@ float ImGui::GetFontSize()
     return GImGui->FontSize;
 }
 
+float ImGui::GetFontLineHeight()
+{
+    return GImGui->FontLineHeight;
+}
+
+float ImGui::GetFontLineAdvance()
+{
+    return GImGui->FontLineAdvance;
+}
+
 ImVec2 ImGui::GetFontTexUvWhitePixel()
 {
     return GImGui->DrawListSharedData.TexUvWhitePixel;
