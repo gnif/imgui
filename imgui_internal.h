@@ -714,7 +714,6 @@ struct IMGUI_API ImDrawListSharedData
     ImFont*         Font;                       // Current/default font (optional, for simplified AddText overload)
     float           FontSize;                   // Current/default font size (optional, for simplified AddText overload)
     float           FontLineHeight;             // Current/default font line height (optional, for simplified AddText overload)
-    float           FontLineAdvance;            // Current/default font line advance (optional, for simplified AddText overload)
     float           FontBaselineOffset;         // Current/default font baseline offset (optional, for simplified AddText overload)
     float           CurveTessellationTol;       // Tessellation tolerance when using PathBezierCurveTo()
     float           CircleSegmentMaxError;      // Number of circle segments to use per pixel of radius for AddCircle() etc
@@ -1506,7 +1505,6 @@ struct ImGuiContext
     ImFont*                 Font;                               // (Shortcut) == FontStack.empty() ? IO.Font : FontStack.back()
     float                   FontSize;                           // (Shortcut) == FontBaseScale * g.CurrentWindow->FontWindowScale * Font->FontSize == window->FontSize(). Text height for current window.
     float                   FontLineHeight;                     // (Shortcut) == FontBaseScale * g.CurrentWindow->FontWindowScale * (Font->FontSize + Font->ExtraLineHeight) (optional, for simplified AddText overload)
-    float                   FontLineAdvance;                    // (Shortcut) == FontBaseScale * g.CurrentWindow->FontWindowScale * (Font->FontSize + Font->ExtraLineHeight + Font->ExtraLineAdvance) (optional, for simplified AddText overload)
     float                   FontBaselineOffset;                 // (Shortcut) == FontBaseScale * g.CurrentWindow->FontWindowScale * Font->BaselineOffset (optional, for simplified AddText overload)
     float                   FontBaseScale;                      // (Shortcut) == IO.FontGlobalScale * Font->Scale. Base text scale.
     ImDrawListSharedData    DrawListSharedData;
@@ -1759,7 +1757,7 @@ struct ImGuiContext
         Initialized = false;
         FontAtlasOwnedByContext = shared_font_atlas ? false : true;
         Font = NULL;
-        FontSize = FontBaseScale = FontLineHeight = FontLineAdvance = FontBaselineOffset = 0.0f;
+        FontSize = FontBaseScale = FontLineHeight = FontBaselineOffset = 0.0f;
         IO.Fonts = shared_font_atlas ? shared_font_atlas : IM_NEW(ImFontAtlas)();
         Time = 0.0f;
         FrameCount = 0;
